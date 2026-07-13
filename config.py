@@ -10,7 +10,7 @@ import os
 # TOKEN
 # ==============================
 
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 
 # ==============================
