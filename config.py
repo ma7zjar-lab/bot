@@ -3,14 +3,14 @@
 # ==============================
 
 
+import os
+
+
 # ==============================
 # TOKEN
 # ==============================
 
-# Put your bot token here
-# NEVER share this publicly
-
-TOKEN = ""
+TOKEN = os.getenv("TOKEN")
 
 
 # ==============================
