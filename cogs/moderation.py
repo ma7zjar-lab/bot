@@ -4,49 +4,80 @@ from discord import app_commands
 
 from datetime import timedelta
 
-from utils import (
-    owner_only,
-    success,
-    error,
-    Confirm
-)
-
-from database.database import add_case
+from config import OWNER_IDS, DM_PUNISHMENTS
+from database.database import add_case, add_warning, get_warnings
+from utils import success, error, Confirm
 
 
 class Moderation(commands.Cog):
 
     def __init__(self, bot):
-
         self.bot = bot
 
 
     # ==============================
-    # Permission Check
+    # Permission / Safety Checks
     # ==============================
 
-    async def check_bot_permission(
+    async def can_act(
         self,
         interaction,
-        permission
+        member
     ):
 
-        if not getattr(
-            interaction.guild.me.guild_permissions,
-            permission
-        ):
+        if member.id == interaction.user.id:
 
             await interaction.response.send_message(
                 embed=error(
-                    "Missing Permission",
-                    f"I need `{permission}` permission."
+                    "Failed",
+                    "You cannot punish yourself."
                 ),
                 ephemeral=True
             )
 
             return False
 
+
+        if member.top_role >= interaction.guild.me.top_role:
+
+            await interaction.response.send_message(
+                embed=error(
+                    "Failed",
+                    "I cannot punish someone with an equal or higher role."
+                ),
+                ephemeral=True
+            )
+
+            return False
+
+
         return True
+
+
+
+    async def send_dm(
+        self,
+        member,
+        title,
+        description
+    ):
+
+        try:
+
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=0x5865F2
+            )
+
+            await member.send(
+                embed=embed
+            )
+
+        except:
+
+            pass
+
 
 
     # ==============================
@@ -57,7 +88,6 @@ class Moderation(commands.Cog):
         name="ban",
         description="Ban a member"
     )
-    @owner_only()
     async def ban(
         self,
         interaction: discord.Interaction,
@@ -65,14 +95,27 @@ class Moderation(commands.Cog):
         reason: str = "No reason provided"
     ):
 
-        if not await self.check_bot_permission(
+        if interaction.user.id not in OWNER_IDS:
+            await interaction.response.send_message(
+                embed=error(
+                    "Denied",
+                    "You are not allowed to use this command."
+                ),
+                ephemeral=True
+            )
+            return
+
+
+        if not await self.can_act(
             interaction,
-            "ban_members"
+            member
         ):
             return
 
 
-        view = Confirm(interaction.user)
+        view = Confirm(
+            interaction.user
+        )
 
 
         await interaction.response.send_message(
@@ -80,8 +123,7 @@ class Moderation(commands.Cog):
                 title="⚠️ Confirm Ban",
                 description=(
                     f"User: {member.mention}\n"
-                    f"Reason: {reason}\n\n"
-                    "Continue?"
+                    f"Reason: {reason}"
                 ),
                 color=0xFEE75C
             ),
@@ -93,7 +135,7 @@ class Moderation(commands.Cog):
         await view.wait()
 
 
-        if view.value != True:
+        if view.value is not True:
 
             await interaction.edit_original_response(
                 embed=error(
@@ -107,6 +149,15 @@ class Moderation(commands.Cog):
 
 
         try:
+
+            if DM_PUNISHMENTS:
+
+                await self.send_dm(
+                    member,
+                    "🔨 You were banned",
+                    reason
+                )
+
 
             await member.ban(
                 reason=reason
@@ -124,9 +175,9 @@ class Moderation(commands.Cog):
 
             await interaction.edit_original_response(
                 embed=success(
-                    "Member Banned",
+                    "Ban Successful",
                     (
-                        f"User: {member.mention}\n"
+                        f"User: {member}\n"
                         f"Reason: {reason}\n"
                         f"Case: #{case}"
                     )
@@ -140,10 +191,11 @@ class Moderation(commands.Cog):
             await interaction.edit_original_response(
                 embed=error(
                     "Failed",
-                    "I cannot ban this member."
+                    "Missing permissions."
                 ),
                 view=None
             )
+
 
 
     # ==============================
@@ -154,7 +206,6 @@ class Moderation(commands.Cog):
         name="kick",
         description="Kick a member"
     )
-    @owner_only()
     async def kick(
         self,
         interaction: discord.Interaction,
@@ -163,14 +214,28 @@ class Moderation(commands.Cog):
     ):
 
 
-        if not await self.check_bot_permission(
+        if interaction.user.id not in OWNER_IDS:
+            await interaction.response.send_message(
+                embed=error(
+                    "Denied",
+                    "You are not allowed."
+                ),
+                ephemeral=True
+            )
+            return
+
+
+        if not await self.can_act(
             interaction,
-            "kick_members"
+            member
         ):
             return
 
 
-        view = Confirm(interaction.user)
+
+        view = Confirm(
+            interaction.user
+        )
 
 
         await interaction.response.send_message(
@@ -190,7 +255,7 @@ class Moderation(commands.Cog):
         await view.wait()
 
 
-        if view.value != True:
+        if view.value is not True:
 
             await interaction.edit_original_response(
                 embed=error(
@@ -204,6 +269,15 @@ class Moderation(commands.Cog):
 
 
         try:
+
+            if DM_PUNISHMENTS:
+
+                await self.send_dm(
+                    member,
+                    "👢 You were kicked",
+                    reason
+                )
+
 
             await member.kick(
                 reason=reason
@@ -221,9 +295,9 @@ class Moderation(commands.Cog):
 
             await interaction.edit_original_response(
                 embed=success(
-                    "Member Kicked",
+                    "Kick Successful",
                     (
-                        f"User: {member.mention}\n"
+                        f"User: {member}\n"
                         f"Reason: {reason}\n"
                         f"Case: #{case}"
                     )
@@ -237,10 +311,11 @@ class Moderation(commands.Cog):
             await interaction.edit_original_response(
                 embed=error(
                     "Failed",
-                    "I cannot kick this member."
+                    "Missing permissions."
                 ),
                 view=None
             )
+
 
 
     # ==============================
@@ -251,7 +326,6 @@ class Moderation(commands.Cog):
         name="timeout",
         description="Timeout a member"
     )
-    @owner_only()
     async def timeout(
         self,
         interaction: discord.Interaction,
@@ -261,19 +335,12 @@ class Moderation(commands.Cog):
     ):
 
 
-        if not await self.check_bot_permission(
-            interaction,
-            "moderate_members"
-        ):
-            return
-
-
-        if minutes > 40320:
+        if interaction.user.id not in OWNER_IDS:
 
             await interaction.response.send_message(
                 embed=error(
-                    "Invalid Duration",
-                    "Maximum timeout is 28 days."
+                    "Denied",
+                    "You are not allowed."
                 ),
                 ephemeral=True
             )
@@ -281,38 +348,27 @@ class Moderation(commands.Cog):
             return
 
 
-        view = Confirm(interaction.user)
+
+        if not await self.can_act(
+            interaction,
+            member
+        ):
+            return
 
 
-        await interaction.response.send_message(
-            embed=discord.Embed(
-                title="⚠️ Confirm Timeout",
-                description=(
-                    f"User: {member.mention}\n"
-                    f"Duration: {minutes} minutes\n"
-                    f"Reason: {reason}"
-                ),
-                color=0xFEE75C
-            ),
-            view=view,
-            ephemeral=True
-        )
 
+        if minutes > 40320:
 
-        await view.wait()
-
-
-        if view.value != True:
-
-            await interaction.edit_original_response(
+            await interaction.response.send_message(
                 embed=error(
-                    "Cancelled",
-                    "Timeout cancelled."
+                    "Invalid Time",
+                    "Maximum timeout is 28 days."
                 ),
-                view=None
+                ephemeral=True
             )
 
             return
+
 
 
         try:
@@ -332,28 +388,122 @@ class Moderation(commands.Cog):
             )
 
 
-            await interaction.edit_original_response(
+            await interaction.response.send_message(
                 embed=success(
-                    "Member Timed Out",
+                    "Timeout Applied",
                     (
-                        f"User: {member.mention}\n"
+                        f"User: {member}\n"
                         f"Duration: {minutes} minutes\n"
                         f"Case: #{case}"
                     )
-                ),
-                view=None
+                )
             )
 
 
         except discord.Forbidden:
 
-            await interaction.edit_original_response(
+            await interaction.response.send_message(
                 embed=error(
                     "Failed",
-                    "I cannot timeout this member."
+                    "Missing permissions."
                 ),
-                view=None
+                ephemeral=True
             )
+
+
+
+    # ==============================
+    # WARN
+    # ==============================
+
+    @app_commands.command(
+        name="warn",
+        description="Warn a member"
+    )
+    async def warn(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+        reason: str
+    ):
+
+        if interaction.user.id not in OWNER_IDS:
+            return
+
+
+        warning = await add_warning(
+            interaction.guild.id,
+            member.id,
+            interaction.user.id,
+            reason
+        )
+
+
+        await interaction.response.send_message(
+            embed=success(
+                "Warning Added",
+                (
+                    f"User: {member}\n"
+                    f"Reason: {reason}\n"
+                    f"Warning ID: #{warning}"
+                )
+            )
+        )
+
+
+
+    # ==============================
+    # WARNINGS
+    # ==============================
+
+    @app_commands.command(
+        name="warnings",
+        description="View warnings"
+    )
+    async def warnings(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member
+    ):
+
+
+        data = await get_warnings(
+            interaction.guild.id,
+            member.id
+        )
+
+
+        if not data:
+
+            await interaction.response.send_message(
+                embed=success(
+                    "Warnings",
+                    "No warnings found."
+                )
+            )
+
+            return
+
+
+
+        text = ""
+
+        for warning in data:
+
+            text += (
+                f"ID: #{warning[0]}\n"
+                f"Reason: {warning[4]}\n\n"
+            )
+
+
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title=f"Warnings for {member}",
+                description=text,
+                color=0xFEE75C
+            )
+        )
+
 
 
 # ==============================
