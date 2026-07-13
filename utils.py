@@ -1,111 +1,111 @@
 import discord
-from datetime import datetime
+
+from discord.ext import commands
 
 from config import (
+    OWNER_IDS,
     SUCCESS_COLOR,
     ERROR_COLOR,
     WARNING_COLOR,
     INFO_COLOR,
-    FOOTER_TEXT,
-    OWNER_IDS
+    LOG_CHANNEL_ID
 )
 
 
 # ==============================
-# EMBED SYSTEM
-# ==============================
-
-def create_embed(title, description, color):
-
-    embed = discord.Embed(
-        title=title,
-        description=description,
-        color=color,
-        timestamp=datetime.utcnow()
-    )
-
-    embed.set_footer(
-        text=FOOTER_TEXT
-    )
-
-    return embed
-
-
-def success(title, description):
-
-    return create_embed(
-        f"✅ {title}",
-        description,
-        SUCCESS_COLOR
-    )
-
-
-def error(title, description):
-
-    return create_embed(
-        f"❌ {title}",
-        description,
-        ERROR_COLOR
-    )
-
-
-def warning(title, description):
-
-    return create_embed(
-        f"⚠️ {title}",
-        description,
-        WARNING_COLOR
-    )
-
-
-def info(title, description):
-
-    return create_embed(
-        f"ℹ️ {title}",
-        description,
-        INFO_COLOR
-    )
-
-
-# ==============================
-# ID LOCK SYSTEM
+# Owner Only Check
 # ==============================
 
 def owner_only():
 
-    async def predicate(
-        interaction: discord.Interaction
-    ):
+    async def predicate(interaction: discord.Interaction):
 
-        if interaction.user.id not in OWNER_IDS:
+        if interaction.user.id in OWNER_IDS:
+            return True
 
-            await interaction.response.send_message(
-                embed=error(
-                    "Access Denied",
-                    "You are not authorized to use this command."
-                ),
-                ephemeral=True
-            )
+        raise app_commands.CheckFailure(
+            "You are not allowed to use this command."
+        )
 
-            return False
+    return app_commands.check(predicate)
 
-        return True
-
-    return discord.app_commands.check(predicate)
 
 
 # ==============================
-# CONFIRMATION BUTTON SYSTEM
+# Embed Helpers
+# ==============================
+
+def success(
+    title,
+    description
+):
+
+    return discord.Embed(
+        title=f"✅ {title}",
+        description=description,
+        color=SUCCESS_COLOR
+    )
+
+
+
+def error(
+    title,
+    description
+):
+
+    return discord.Embed(
+        title=f"❌ {title}",
+        description=description,
+        color=ERROR_COLOR
+    )
+
+
+
+def warning(
+    title,
+    description
+):
+
+    return discord.Embed(
+        title=f"⚠️ {title}",
+        description=description,
+        color=WARNING_COLOR
+    )
+
+
+
+def info(
+    title,
+    description
+):
+
+    return discord.Embed(
+        title=f"ℹ️ {title}",
+        description=description,
+        color=INFO_COLOR
+    )
+
+
+
+# ==============================
+# Confirmation Buttons
 # ==============================
 
 class Confirm(discord.ui.View):
 
-    def __init__(self, author):
+    def __init__(
+        self,
+        author,
+        timeout=60
+    ):
 
-        super().__init__(timeout=60)
+        super().__init__(
+            timeout=timeout
+        )
 
         self.author = author
         self.value = None
+
 
 
     async def interaction_check(
@@ -116,21 +116,22 @@ class Confirm(discord.ui.View):
         if interaction.user.id != self.author.id:
 
             await interaction.response.send_message(
-                "You cannot use these buttons.",
+                "❌ You cannot use this confirmation.",
                 ephemeral=True
             )
 
             return False
 
+
         return True
 
 
+
     @discord.ui.button(
-        label="Yes",
-        style=discord.ButtonStyle.green,
-        emoji="✅"
+        label="Confirm",
+        style=discord.ButtonStyle.green
     )
-    async def yes(
+    async def confirm(
         self,
         interaction,
         button
@@ -143,12 +144,12 @@ class Confirm(discord.ui.View):
         self.stop()
 
 
+
     @discord.ui.button(
-        label="No",
-        style=discord.ButtonStyle.red,
-        emoji="❌"
+        label="Cancel",
+        style=discord.ButtonStyle.red
     )
-    async def no(
+    async def cancel(
         self,
         interaction,
         button
@@ -159,3 +160,45 @@ class Confirm(discord.ui.View):
         await interaction.response.defer()
 
         self.stop()
+
+
+
+# ==============================
+# Logging Helper
+# ==============================
+
+async def send_log(
+    guild,
+    title,
+    description,
+    color=INFO_COLOR
+):
+
+    if guild is None:
+        return
+
+
+    channel = guild.get_channel(
+        LOG_CHANNEL_ID
+    )
+
+
+    if channel is None:
+        return
+
+
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=color
+    )
+
+
+    embed.set_footer(
+        text="Moderation Bot Logs"
+    )
+
+
+    await channel.send(
+        embed=embed
+    )
