@@ -13,10 +13,9 @@ from config import TOKEN, PREFIX
 intents = discord.Intents.all()
 
 bot = commands.Bot(
-    command_prefix=PREFIX,
+    command_prefix=commands.when_mentioned_or(PREFIX),
     intents=intents
 )
-
 
 # ==============================
 # Startup Event
