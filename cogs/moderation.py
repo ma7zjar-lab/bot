@@ -5,8 +5,19 @@ from discord import app_commands
 from datetime import timedelta
 
 from config import OWNER_IDS, DM_PUNISHMENTS
-from database.database import add_case, add_warning, get_warnings
-from utils import success, error, Confirm
+
+from utils import (
+    success,
+    error,
+    Confirm,
+    send_log
+)
+
+from database.database import (
+    add_case,
+    add_warning,
+    get_warnings
+)
 
 
 class Moderation(commands.Cog):
@@ -19,7 +30,27 @@ class Moderation(commands.Cog):
     # Permission / Safety Checks
     # ==============================
 
-    async def can_act(
+    async def owner_check(
+        self,
+        interaction
+    ):
+
+        if interaction.user.id not in OWNER_IDS:
+
+            await interaction.response.send_message(
+                embed=error(
+                    "Access Denied",
+                    "You are not allowed to use this command."
+                ),
+                ephemeral=True
+            )
+
+            return False
+
+        return True
+
+
+    async def can_punish(
         self,
         interaction,
         member
@@ -43,7 +74,7 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(
                 embed=error(
                     "Failed",
-                    "I cannot punish someone with an equal or higher role."
+                    "I cannot punish this member because their role is higher than mine."
                 ),
                 ephemeral=True
             )
@@ -54,19 +85,21 @@ class Moderation(commands.Cog):
         return True
 
 
-
     async def send_dm(
         self,
         member,
         title,
-        description
+        reason
     ):
+
+        if not DM_PUNISHMENTS:
+            return
 
         try:
 
             embed = discord.Embed(
                 title=title,
-                description=description,
+                description=f"Reason: {reason}",
                 color=0x5865F2
             )
 
@@ -95,27 +128,15 @@ class Moderation(commands.Cog):
         reason: str = "No reason provided"
     ):
 
-        if interaction.user.id not in OWNER_IDS:
-            await interaction.response.send_message(
-                embed=error(
-                    "Denied",
-                    "You are not allowed to use this command."
-                ),
-                ephemeral=True
-            )
+        if not await self.owner_check(interaction):
             return
 
 
-        if not await self.can_act(
-            interaction,
-            member
-        ):
+        if not await self.can_punish(interaction, member):
             return
 
 
-        view = Confirm(
-            interaction.user
-        )
+        view = Confirm(interaction.user)
 
 
         await interaction.response.send_message(
@@ -150,13 +171,11 @@ class Moderation(commands.Cog):
 
         try:
 
-            if DM_PUNISHMENTS:
-
-                await self.send_dm(
-                    member,
-                    "🔨 You were banned",
-                    reason
-                )
+            await self.send_dm(
+                member,
+                "🔨 You were banned",
+                reason
+            )
 
 
             await member.ban(
@@ -173,12 +192,24 @@ class Moderation(commands.Cog):
             )
 
 
+            await send_log(
+                interaction.guild,
+                "🔨 Member Banned",
+                (
+                    f"User: {member.mention}\n"
+                    f"Moderator: {interaction.user.mention}\n"
+                    f"Reason: {reason}\n"
+                    f"Case: #{case}"
+                ),
+                0xED4245
+            )
+
+
             await interaction.edit_original_response(
                 embed=success(
                     "Ban Successful",
                     (
                         f"User: {member}\n"
-                        f"Reason: {reason}\n"
                         f"Case: #{case}"
                     )
                 ),
@@ -191,7 +222,7 @@ class Moderation(commands.Cog):
             await interaction.edit_original_response(
                 embed=error(
                     "Failed",
-                    "Missing permissions."
+                    "I do not have permission to ban this member."
                 ),
                 view=None
             )
@@ -208,75 +239,26 @@ class Moderation(commands.Cog):
     )
     async def kick(
         self,
-        interaction: discord.Interaction,
+        interaction,
         member: discord.Member,
         reason: str = "No reason provided"
     ):
 
-
-        if interaction.user.id not in OWNER_IDS:
-            await interaction.response.send_message(
-                embed=error(
-                    "Denied",
-                    "You are not allowed."
-                ),
-                ephemeral=True
-            )
+        if not await self.owner_check(interaction):
             return
 
 
-        if not await self.can_act(
-            interaction,
-            member
-        ):
-            return
-
-
-
-        view = Confirm(
-            interaction.user
-        )
-
-
-        await interaction.response.send_message(
-            embed=discord.Embed(
-                title="⚠️ Confirm Kick",
-                description=(
-                    f"User: {member.mention}\n"
-                    f"Reason: {reason}"
-                ),
-                color=0xFEE75C
-            ),
-            view=view,
-            ephemeral=True
-        )
-
-
-        await view.wait()
-
-
-        if view.value is not True:
-
-            await interaction.edit_original_response(
-                embed=error(
-                    "Cancelled",
-                    "Kick cancelled."
-                ),
-                view=None
-            )
-
+        if not await self.can_punish(interaction, member):
             return
 
 
         try:
 
-            if DM_PUNISHMENTS:
-
-                await self.send_dm(
-                    member,
-                    "👢 You were kicked",
-                    reason
-                )
+            await self.send_dm(
+                member,
+                "👢 You were kicked",
+                reason
+            )
 
 
             await member.kick(
@@ -293,27 +275,34 @@ class Moderation(commands.Cog):
             )
 
 
-            await interaction.edit_original_response(
+            await send_log(
+                interaction.guild,
+                "👢 Member Kicked",
+                (
+                    f"User: {member.mention}\n"
+                    f"Moderator: {interaction.user.mention}\n"
+                    f"Reason: {reason}\n"
+                    f"Case: #{case}"
+                )
+            )
+
+
+            await interaction.response.send_message(
                 embed=success(
                     "Kick Successful",
-                    (
-                        f"User: {member}\n"
-                        f"Reason: {reason}\n"
-                        f"Case: #{case}"
-                    )
-                ),
-                view=None
+                    f"Case: #{case}"
+                )
             )
 
 
         except discord.Forbidden:
 
-            await interaction.edit_original_response(
+            await interaction.response.send_message(
                 embed=error(
                     "Failed",
                     "Missing permissions."
                 ),
-                view=None
+                ephemeral=True
             )
 
 
@@ -328,33 +317,18 @@ class Moderation(commands.Cog):
     )
     async def timeout(
         self,
-        interaction: discord.Interaction,
+        interaction,
         member: discord.Member,
         minutes: int,
         reason: str = "No reason provided"
     ):
 
-
-        if interaction.user.id not in OWNER_IDS:
-
-            await interaction.response.send_message(
-                embed=error(
-                    "Denied",
-                    "You are not allowed."
-                ),
-                ephemeral=True
-            )
-
+        if not await self.owner_check(interaction):
             return
 
 
-
-        if not await self.can_act(
-            interaction,
-            member
-        ):
+        if not await self.can_punish(interaction, member):
             return
-
 
 
         if minutes > 40320:
@@ -368,7 +342,6 @@ class Moderation(commands.Cog):
             )
 
             return
-
 
 
         try:
@@ -388,14 +361,22 @@ class Moderation(commands.Cog):
             )
 
 
+            await send_log(
+                interaction.guild,
+                "⏱️ Member Timeout",
+                (
+                    f"User: {member.mention}\n"
+                    f"Duration: {minutes} minutes\n"
+                    f"Reason: {reason}\n"
+                    f"Case: #{case}"
+                )
+            )
+
+
             await interaction.response.send_message(
                 embed=success(
                     "Timeout Applied",
-                    (
-                        f"User: {member}\n"
-                        f"Duration: {minutes} minutes\n"
-                        f"Case: #{case}"
-                    )
+                    f"Case: #{case}"
                 )
             )
 
@@ -422,12 +403,12 @@ class Moderation(commands.Cog):
     )
     async def warn(
         self,
-        interaction: discord.Interaction,
+        interaction,
         member: discord.Member,
         reason: str
     ):
 
-        if interaction.user.id not in OWNER_IDS:
+        if not await self.owner_check(interaction):
             return
 
 
@@ -439,14 +420,21 @@ class Moderation(commands.Cog):
         )
 
 
+        await send_log(
+            interaction.guild,
+            "⚠️ Warning Added",
+            (
+                f"User: {member.mention}\n"
+                f"Reason: {reason}\n"
+                f"Warning ID: #{warning}"
+            )
+        )
+
+
         await interaction.response.send_message(
             embed=success(
                 "Warning Added",
-                (
-                    f"User: {member}\n"
-                    f"Reason: {reason}\n"
-                    f"Warning ID: #{warning}"
-                )
+                f"Warning ID: #{warning}"
             )
         )
 
@@ -462,10 +450,9 @@ class Moderation(commands.Cog):
     )
     async def warnings(
         self,
-        interaction: discord.Interaction,
+        interaction,
         member: discord.Member
     ):
-
 
         data = await get_warnings(
             interaction.guild.id,
@@ -485,14 +472,13 @@ class Moderation(commands.Cog):
             return
 
 
-
         text = ""
 
-        for warning in data:
+        for warn in data:
 
             text += (
-                f"ID: #{warning[0]}\n"
-                f"Reason: {warning[4]}\n\n"
+                f"ID: #{warn[0]}\n"
+                f"Reason: {warn[4]}\n\n"
             )
 
 
