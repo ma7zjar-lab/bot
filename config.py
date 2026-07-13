@@ -2,16 +2,22 @@
 # Discord Bot Configuration
 # ==============================
 
-# Put your bot token here at the end of the project
-# DO NOT share this with anyone
+
+# ==============================
+# TOKEN
+# ==============================
+
+# Put your bot token here
+# NEVER share this publicly
+
 TOKEN = ""
 
+
 # ==============================
-# Command Access
+# OWNER / ACCESS CONTROL
 # ==============================
 
-# Only these Discord user IDs can use bot commands
-# Replace these example IDs with your own Discord ID
+# Only these Discord IDs can use locked commands
 
 OWNER_IDS = {
     972434666948808724,
@@ -19,14 +25,40 @@ OWNER_IDS = {
 
 
 # ==============================
-# Database
+# COMMAND SETTINGS
+# ==============================
+
+PREFIX = "!"
+
+SLASH_COMMANDS = True
+PREFIX_COMMANDS = True
+
+SYNC_COMMANDS_ON_START = True
+
+
+# ==============================
+# DATABASE
 # ==============================
 
 DATABASE = "data/bot.db"
 
 
 # ==============================
-# Embed Settings
+# LOGGING SETTINGS
+# ==============================
+
+LOG_CHANNEL_ID = 1398996215236001815
+
+LOG_MESSAGES = True
+LOG_MEMBER_EVENTS = True
+LOG_MODERATION = True
+LOG_ROLE_CHANGES = True
+LOG_VOICE_CHANGES = True
+LOG_NICKNAME_CHANGES = True
+
+
+# ==============================
+# EMBED SETTINGS
 # ==============================
 
 SUCCESS_COLOR = 0x57F287
@@ -38,16 +70,82 @@ FOOTER_TEXT = "Moderation Bot"
 
 
 # ==============================
-# Logging
+# CONFIRMATION SYSTEM
 # ==============================
 
-# Put your log channel ID here later
-LOG_CHANNEL_ID = https://discord.com/channels/1398950429320155166/1398996215236001815
+CONFIRM_ACTIONS = True
+
+CONFIRM_TIMEOUT = 60
 
 
 # ==============================
-# Prefix
+# MODERATION SETTINGS
 # ==============================
 
-# Prefix commands (!ban, !kick, etc.)
-PREFIX = "!"
+DM_PUNISHMENTS = True
+
+STORE_CASES = True
+
+AUTO_CASE_NUMBERS = True
+
+
+# ==============================
+# NICKNAME SYSTEM
+# ==============================
+
+NICKNAME_SEPARATOR = " | "
+
+NICKNAME_SKIP_BOTS = True
+
+NICKNAME_SEND_PROGRESS_DM = True
+
+NICKNAME_PROGRESS_AMOUNT = 10
+
+
+# ==============================
+# AUTOMOD SETTINGS
+# ==============================
+
+AUTOMOD_ENABLED = True
+
+ANTI_SPAM = True
+ANTI_LINKS = True
+ANTI_INVITES = True
+ANTI_CAPS = True
+ANTI_MENTION_SPAM = True
+ANTI_DUPLICATES = True
+
+BAD_WORD_FILTER = True
+
+
+# ==============================
+# TICKET SYSTEM
+# ==============================
+
+TICKETS_ENABLED = True
+
+TICKET_CATEGORY_ID = None
+
+TICKET_LOG_CHANNEL_ID = None
+
+
+# ==============================
+# VERIFICATION SYSTEM
+# ==============================
+
+VERIFICATION_ENABLED = False
+
+VERIFICATION_CHANNEL_ID = None
+
+VERIFIED_ROLE_ID = None
+
+
+# ==============================
+# GENERAL BOT SETTINGS
+# ==============================
+
+IGNORE_BOTS = True
+
+OWNER_ONLY_MODE = True
+
+DEBUG_MODE = False
