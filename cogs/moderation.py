@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+
 from datetime import timedelta
 
 from utils import (
@@ -10,6 +11,8 @@ from utils import (
     Confirm
 )
 
+from database.database import add_case
+
 
 class Moderation(commands.Cog):
 
@@ -18,13 +21,41 @@ class Moderation(commands.Cog):
         self.bot = bot
 
 
-    # ==========================
-    # BAN SLASH COMMAND
-    # ==========================
+    # ==============================
+    # Permission Check
+    # ==============================
+
+    async def check_bot_permission(
+        self,
+        interaction,
+        permission
+    ):
+
+        if not getattr(
+            interaction.guild.me.guild_permissions,
+            permission
+        ):
+
+            await interaction.response.send_message(
+                embed=error(
+                    "Missing Permission",
+                    f"I need `{permission}` permission."
+                ),
+                ephemeral=True
+            )
+
+            return False
+
+        return True
+
+
+    # ==============================
+    # BAN
+    # ==============================
 
     @app_commands.command(
         name="ban",
-        description="Ban a member from the server"
+        description="Ban a member"
     )
     @owner_only()
     async def ban(
@@ -34,19 +65,24 @@ class Moderation(commands.Cog):
         reason: str = "No reason provided"
     ):
 
+        if not await self.check_bot_permission(
+            interaction,
+            "ban_members"
+        ):
+            return
+
+
         view = Confirm(interaction.user)
+
 
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="⚠️ Confirm Ban",
-                description=f"""
-User: {member.mention}
-
-Reason:
-{reason}
-
-Are you sure?
-""",
+                description=(
+                    f"User: {member.mention}\n"
+                    f"Reason: {reason}\n\n"
+                    "Continue?"
+                ),
                 color=0xFEE75C
             ),
             view=view,
@@ -57,20 +93,7 @@ Are you sure?
         await view.wait()
 
 
-        if view.value is None:
-
-            await interaction.edit_original_response(
-                embed=error(
-                    "Cancelled",
-                    "Confirmation timed out."
-                ),
-                view=None
-            )
-
-            return
-
-
-        if view.value is False:
+        if view.value != True:
 
             await interaction.edit_original_response(
                 embed=error(
@@ -85,21 +108,28 @@ Are you sure?
 
         try:
 
-            await member.ban(reason=reason)
+            await member.ban(
+                reason=reason
+            )
+
+
+            case = await add_case(
+                interaction.guild.id,
+                member.id,
+                interaction.user.id,
+                "BAN",
+                reason
+            )
 
 
             await interaction.edit_original_response(
                 embed=success(
                     "Member Banned",
-                    f"""
-User: {member.mention}
-
-Reason:
-{reason}
-
-Moderator:
-{interaction.user.mention}
-"""
+                    (
+                        f"User: {member.mention}\n"
+                        f"Reason: {reason}\n"
+                        f"Case: #{case}"
+                    )
                 ),
                 view=None
             )
@@ -110,15 +140,15 @@ Moderator:
             await interaction.edit_original_response(
                 embed=error(
                     "Failed",
-                    "I do not have permission to ban this member."
+                    "I cannot ban this member."
                 ),
                 view=None
             )
 
 
-    # ==========================
-    # KICK SLASH COMMAND
-    # ==========================
+    # ==============================
+    # KICK
+    # ==============================
 
     @app_commands.command(
         name="kick",
@@ -133,19 +163,23 @@ Moderator:
     ):
 
 
+        if not await self.check_bot_permission(
+            interaction,
+            "kick_members"
+        ):
+            return
+
+
         view = Confirm(interaction.user)
 
 
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="⚠️ Confirm Kick",
-                description=f"""
-User:
-{member.mention}
-
-Reason:
-{reason}
-""",
+                description=(
+                    f"User: {member.mention}\n"
+                    f"Reason: {reason}"
+                ),
                 color=0xFEE75C
             ),
             view=view,
@@ -171,19 +205,28 @@ Reason:
 
         try:
 
-            await member.kick(reason=reason)
+            await member.kick(
+                reason=reason
+            )
+
+
+            case = await add_case(
+                interaction.guild.id,
+                member.id,
+                interaction.user.id,
+                "KICK",
+                reason
+            )
 
 
             await interaction.edit_original_response(
                 embed=success(
                     "Member Kicked",
-                    f"""
-User:
-{member.mention}
-
-Reason:
-{reason}
-"""
+                    (
+                        f"User: {member.mention}\n"
+                        f"Reason: {reason}\n"
+                        f"Case: #{case}"
+                    )
                 ),
                 view=None
             )
@@ -200,9 +243,9 @@ Reason:
             )
 
 
-    # ==========================
+    # ==============================
     # TIMEOUT
-    # ==========================
+    # ==============================
 
     @app_commands.command(
         name="timeout",
@@ -218,22 +261,37 @@ Reason:
     ):
 
 
+        if not await self.check_bot_permission(
+            interaction,
+            "moderate_members"
+        ):
+            return
+
+
+        if minutes > 40320:
+
+            await interaction.response.send_message(
+                embed=error(
+                    "Invalid Duration",
+                    "Maximum timeout is 28 days."
+                ),
+                ephemeral=True
+            )
+
+            return
+
+
         view = Confirm(interaction.user)
 
 
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="⚠️ Confirm Timeout",
-                description=f"""
-User:
-{member.mention}
-
-Duration:
-{minutes} minutes
-
-Reason:
-{reason}
-""",
+                description=(
+                    f"User: {member.mention}\n"
+                    f"Duration: {minutes} minutes\n"
+                    f"Reason: {reason}"
+                ),
                 color=0xFEE75C
             ),
             view=view,
@@ -265,19 +323,23 @@ Reason:
             )
 
 
+            case = await add_case(
+                interaction.guild.id,
+                member.id,
+                interaction.user.id,
+                "TIMEOUT",
+                reason
+            )
+
+
             await interaction.edit_original_response(
                 embed=success(
                     "Member Timed Out",
-                    f"""
-User:
-{member.mention}
-
-Duration:
-{minutes} minutes
-
-Reason:
-{reason}
-"""
+                    (
+                        f"User: {member.mention}\n"
+                        f"Duration: {minutes} minutes\n"
+                        f"Case: #{case}"
+                    )
                 ),
                 view=None
             )
@@ -293,6 +355,10 @@ Reason:
                 view=None
             )
 
+
+# ==============================
+# Setup
+# ==============================
 
 async def setup(bot):
 
