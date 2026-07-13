@@ -1,236 +1,212 @@
 import discord
 from discord.ext import commands
-import asyncio
-import os
-import logging
+from discord import app_commands
 
-from config import TOKEN, PREFIX, SYNC_COMMANDS_ON_START
+import os
+
+
 from database.database import init_database
 
 
 # ==============================
-# Logging Setup
+# Config
 # ==============================
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] [%(levelname)s] %(message)s"
+TOKEN = os.getenv(
+    "DISCORD_TOKEN"
 )
 
-logger = logging.getLogger("bot")
+
+PREFIX = "!"
 
 
 # ==============================
-# Bot Intents
+# Intents
 # ==============================
 
 intents = discord.Intents.all()
 
 
+
 # ==============================
-# Custom Bot Class
+# Bot Setup
 # ==============================
 
-class ModerationBot(commands.Bot):
+bot = commands.Bot(
+    command_prefix=commands.when_mentioned_or(PREFIX),
+    intents=intents
+)
 
-    def __init__(self):
 
-        super().__init__(
-            command_prefix=commands.when_mentioned_or(PREFIX),
-            intents=intents,
-            help_command=None
+
+# ==============================
+# Load Cogs
+# ==============================
+
+async def load_cogs():
+
+    if not os.path.exists(
+        "cogs"
+    ):
+
+        os.makedirs(
+            "cogs"
         )
 
 
-    async def setup_hook(self):
-
-        logger.info("Running setup...")
-
-
-        # Initialize database
-
-        await init_database()
-
-        logger.info("Database ready")
+    for filename in os.listdir(
+        "./cogs"
+    ):
 
 
-        # Load cogs
-
-        await self.load_cogs()
-
-
-        # Sync slash commands
-
-        if SYNC_COMMANDS_ON_START:
+        if (
+            filename.endswith(".py")
+            and not filename.startswith("_")
+        ):
 
             try:
 
-                synced = await self.tree.sync()
-
-                logger.info(
-                    f"Synced {len(synced)} slash commands"
+                await bot.load_extension(
+                    f"cogs.{filename[:-3]}"
                 )
+
+
+                print(
+                    f"✅ Loaded cog: {filename}"
+                )
+
 
             except Exception as e:
 
-                logger.error(
-                    f"Slash sync failed: {e}"
+                print(
+                    f"❌ Failed loading {filename}: {e}"
                 )
 
 
-    async def load_cogs(self):
 
-        if not os.path.exists("cogs"):
+# ==============================
+# Startup
+# ==============================
 
-            os.makedirs("cogs")
+@bot.event
+async def setup_hook():
 
+    await init_database()
 
-        for filename in os.listdir("./cogs"):
-
-
-            if (
-                filename.endswith(".py")
-                and not filename.startswith("_")
-            ):
-
-                try:
-
-                    await self.load_extension(
-                        f"cogs.{filename[:-3]}"
-                    )
+    await load_cogs()
 
 
-                    logger.info(
-                        f"Loaded cog: {filename}"
-                    )
+    try:
+
+        synced = await bot.tree.sync()
+
+        print(
+            f"✅ Synced {len(synced)} slash commands"
+        )
 
 
-                except Exception as e:
+    except Exception as e:
 
-                    logger.error(
-                        f"Failed loading {filename}: {e}"
-                    )
+        print(
+            f"❌ Slash sync failed: {e}"
+        )
+
 
 
 # ==============================
-# Create Bot
-# ==============================
-
-bot = ModerationBot()
-
-
-# ==============================
-# Events
+# Ready Event
 # ==============================
 
 @bot.event
 async def on_ready():
 
-    logger.info(
-        "=============================="
+    print(
+        "================================"
     )
 
-    logger.info(
-        f"Logged in as {bot.user}"
+    print(
+        f"🤖 Logged in as {bot.user}"
     )
 
-    logger.info(
-        f"Bot ID: {bot.user.id}"
+    print(
+        f"🆔 Bot ID: {bot.user.id}"
     )
 
-    logger.info(
-        f"Servers: {len(bot.guilds)}"
-    )
-
-    logger.info(
-        "=============================="
+    print(
+        "================================"
     )
 
 
-@bot.event
-async def on_command_error(
-    ctx,
-    error
-):
 
-    if isinstance(
-        error,
-        commands.CommandNotFound
-    ):
+# ==============================
+# Global Error Handler
+# ==============================
 
-        return
-
-
-    logger.error(
-        f"Command error: {error}"
-    )
-
-
-    try:
-
-        await ctx.send(
-            f"❌ Error: `{error}`"
-        )
-
-    except:
-
-        pass
-
-
-@bot.event
+@bot.tree.error
 async def on_app_command_error(
     interaction,
     error
 ):
 
-    logger.error(
-        f"Slash error: {error}"
+    if isinstance(
+        error,
+        app_commands.MissingPermissions
+    ):
+
+        message = (
+            "You do not have permission "
+            "to use this command."
+        )
+
+
+    elif isinstance(
+        error,
+        app_commands.CommandOnCooldown
+    ):
+
+        message = (
+            "Command is on cooldown."
+        )
+
+
+    else:
+
+        print(
+            error
+        )
+
+        message = (
+            "An unexpected error occurred."
+        )
+
+
+    if interaction.response.is_done():
+
+        await interaction.followup.send(
+            message,
+            ephemeral=True
+        )
+
+    else:
+
+        await interaction.response.send_message(
+            message,
+            ephemeral=True
+        )
+
+
+
+# ==============================
+# Start Bot
+# ==============================
+
+if TOKEN is None:
+
+    raise Exception(
+        "DISCORD_TOKEN is missing!"
     )
 
 
-    try:
-
-        if interaction.response.is_done():
-
-            await interaction.followup.send(
-                f"❌ Error: `{error}`",
-                ephemeral=True
-            )
-
-        else:
-
-            await interaction.response.send_message(
-                f"❌ Error: `{error}`",
-                ephemeral=True
-            )
-
-
-    except:
-
-        pass
-
-
-# ==============================
-# Run Bot
-# ==============================
-
-async def main():
-
-    if not TOKEN:
-
-        logger.error(
-            "No Discord token found!"
-        )
-
-        return
-
-
-    async with bot:
-
-        await bot.start(TOKEN)
-
-
-
-if __name__ == "__main__":
-
-    asyncio.run(main())
+bot.run(
+    TOKEN
+)
