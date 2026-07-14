@@ -1,42 +1,23 @@
+import os
 import discord
 from discord.ext import commands
-from discord import app_commands
-
-import os
-
 
 from database.database import init_database
 
-
 # ==============================
-# Config
+# Bot Configuration
 # ==============================
 
-TOKEN = os.getenv(
-    "DISCORD_TOKEN"
-)
-
-
+TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "!"
-
-
-# ==============================
-# Intents
-# ==============================
 
 intents = discord.Intents.all()
 
-
-
-# ==============================
-# Bot Setup
-# ==============================
-
 bot = commands.Bot(
-    command_prefix=commands.when_mentioned_or(PREFIX),
-    intents=intents
+    command_prefix=PREFIX,
+    intents=intents,
+    help_command=None
 )
-
 
 
 # ==============================
@@ -45,24 +26,12 @@ bot = commands.Bot(
 
 async def load_cogs():
 
-    if not os.path.exists(
-        "cogs"
-    ):
+    if not os.path.exists("cogs"):
+        os.makedirs("cogs")
 
-        os.makedirs(
-            "cogs"
-        )
+    for filename in os.listdir("./cogs"):
 
-
-    for filename in os.listdir(
-        "./cogs"
-    ):
-
-
-        if (
-            filename.endswith(".py")
-            and not filename.startswith("_")
-        ):
+        if filename.endswith(".py") and not filename.startswith("_"):
 
             try:
 
@@ -70,18 +39,17 @@ async def load_cogs():
                     f"cogs.{filename[:-3]}"
                 )
 
-
                 print(
-                    f"✅ Loaded cog: {filename}"
+                    f"✅ Loaded {filename}"
                 )
-
 
             except Exception as e:
 
                 print(
-                    f"❌ Failed loading {filename}: {e}"
+                    f"❌ Failed loading {filename}"
                 )
 
+                print(e)
 
 
 # ==============================
@@ -96,117 +64,109 @@ async def setup_hook():
     await load_cogs()
 
 
-    try:
-
-        synced = await bot.tree.sync()
-
-        print(
-            f"✅ Synced {len(synced)} slash commands"
-        )
-
-
-    except Exception as e:
-
-        print(
-            f"❌ Slash sync failed: {e}"
-        )
-
-
-
 # ==============================
-# Ready Event
+# Ready
 # ==============================
 
 @bot.event
 async def on_ready():
 
+    print("=" * 40)
+
     print(
-        "================================"
+        f"Logged in as {bot.user}"
     )
 
     print(
-        f"🤖 Logged in as {bot.user}"
+        f"ID: {bot.user.id}"
     )
 
     print(
-        f"🆔 Bot ID: {bot.user.id}"
+        f"Servers: {len(bot.guilds)}"
     )
 
-    print(
-        "================================"
-    )
-
+    print("=" * 40)
 
 
 # ==============================
-# Global Error Handler
+# Prefix Command Error Handler
 # ==============================
 
-@bot.tree.error
-async def on_app_command_error(
-    interaction,
+@bot.event
+async def on_command_error(
+    ctx,
     error
 ):
 
     if isinstance(
         error,
-        app_commands.MissingPermissions
+        commands.CommandNotFound
+    ):
+        return
+
+
+    elif isinstance(
+        error,
+        commands.MissingPermissions
     ):
 
-        message = (
-            "You do not have permission "
-            "to use this command."
+        await ctx.send(
+            "❌ You don't have permission to use that command."
         )
 
 
     elif isinstance(
         error,
-        app_commands.CommandOnCooldown
+        commands.BotMissingPermissions
     ):
 
-        message = (
-            "Command is on cooldown."
+        await ctx.send(
+            "❌ I don't have the required permissions."
+        )
+
+
+    elif isinstance(
+        error,
+        commands.MissingRequiredArgument
+    ):
+
+        await ctx.send(
+            "❌ Missing required arguments."
+        )
+
+
+    elif isinstance(
+        error,
+        commands.BadArgument
+    ):
+
+        await ctx.send(
+            "❌ Invalid argument."
         )
 
 
     else:
 
-        print(
-            error
+        print(error)
+
+        await ctx.send(
+            "❌ An unexpected error occurred."
         )
-
-        message = (
-            "An unexpected error occurred."
-        )
-
-
-    if interaction.response.is_done():
-
-        await interaction.followup.send(
-            message,
-            ephemeral=True
-        )
-
-    else:
-
-        await interaction.response.send_message(
-            message,
-            ephemeral=True
-        )
-
 
 
 # ==============================
-# Start Bot
+# Startup Check
 # ==============================
 
 if TOKEN is None:
 
-    raise Exception(
-        "DISCORD_TOKEN is missing!"
+    raise RuntimeError(
+        "DISCORD_TOKEN environment variable is missing."
     )
 
 
-bot.run(
-    TOKEN
-)
+# ==============================
+# Run Bot
+# ==============================
+
+bot.run(TOKEN)
